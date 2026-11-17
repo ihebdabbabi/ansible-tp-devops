@@ -1,0 +1,11 @@
+---
+- name: Afficher les facts système des nœuds
+  hosts: all
+  tasks:
+    - name: Résumé système
+      ansible.builtin.debug:
+        msg:
+          - "OS : {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "RAM : {{ ansible_memtotal_mb }} Mo"
+          - "CPU : {{ ansible_processor_vcpus }} vCPU"
+          - "IP : {{ ansible_default_ipv4.address }}"
