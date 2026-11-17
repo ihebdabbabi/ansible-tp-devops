@@ -1,0 +1,9 @@
+*.pem
+*.key
+id_*
+.vault_pass
+inventory/hosts
+*.retry
+rapport_*.txt
+.vscode/
+.idea/
