@@ -1,0 +1,64 @@
+---
+- name: Installer GitLab CE sur node01
+  hosts: node01
+  become: true
+  vars:
+    gitlab_port: 8888
+    gitlab_external_url: "http://{{ ansible_facts['default_ipv4']['address'] }}:{{ gitlab_port }}"
+
+  tasks:
+    - name: Installer les prérequis
+      ansible.builtin.apt:
+        name:
+          - curl
+          - ca-certificates
+          - openssh-server
+          - python3-debian
+        state: present
+        update_cache: true
+
+    - name: Ajouter le dépôt officiel GitLab CE
+      ansible.builtin.deb822_repository:
+        name: gitlab-ce
+        types: deb
+        uris: https://packages.gitlab.com/gitlab/gitlab-ce/ubuntu/
+        suites: "{{ ansible_facts['distribution_release'] }}"
+        components: main
+        signed_by: https://packages.gitlab.com/gitlab/gitlab-ce/gpgkey
+        state: present
+
+    - name: Installer GitLab CE
+      ansible.builtin.apt:
+        name: gitlab-ce
+        state: present
+        update_cache: true
+      environment:
+        EXTERNAL_URL: "{{ gitlab_external_url }}"
+
+    - name: Garantir l'URL externe dans gitlab.rb
+      ansible.builtin.lineinfile:
+        path: /etc/gitlab/gitlab.rb
+        regexp: '^external_url '
+        line: "external_url '{{ gitlab_external_url }}'"
+      notify: Reconfigurer GitLab
+
+    - name: Démarrer et activer GitLab au démarrage
+      ansible.builtin.service:
+        name: gitlab-runsvdir
+        state: started
+        enabled: true
+
+    - name: Vérifier que GitLab répond depuis le controller
+      ansible.builtin.uri:
+        url: "http://{{ ansible_facts['default_ipv4']['address'] }}:{{ gitlab_port }}/users/sign_in"
+        status_code: 200
+      delegate_to: localhost
+      become: false
+      register: gitlab_check
+      retries: 30
+      delay: 10
+      until: gitlab_check.status == 200
+
+  handlers:
+    - name: Reconfigurer GitLab
+      ansible.builtin.command: gitlab-ctl reconfigure

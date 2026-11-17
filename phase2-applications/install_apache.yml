@@ -1,0 +1,49 @@
+---
+- name: Installer et configurer Apache sur node02
+  hosts: node02
+  become: true
+  vars:
+    apache_package: apache2
+    apache_service: apache2
+    apache_port: 80
+    apache_title: "node02 - Apache"
+    apache_message: "Serveur Apache déployé avec Ansible"
+
+  tasks:
+    - name: Installer Apache
+      ansible.builtin.apt:
+        name: "{{ apache_package }}"
+        state: present
+        update_cache: true
+
+    - name: Définir le port d'écoute
+      ansible.builtin.lineinfile:
+        path: /etc/apache2/ports.conf
+        regexp: '^Listen '
+        line: "Listen {{ apache_port }}"
+      notify: Redémarrer Apache
+
+    - name: Adapter le port du virtual host par défaut
+      ansible.builtin.replace:
+        path: /etc/apache2/sites-available/000-default.conf
+        regexp: '<VirtualHost \*:[0-9]+>'
+        replace: "<VirtualHost *:{{ apache_port }}>"
+      notify: Redémarrer Apache
+
+    - name: Déployer la page d'accueil
+      ansible.builtin.template:
+        src: index_apache.html.j2
+        dest: /var/www/html/index.html
+        mode: "0644"
+
+    - name: Démarrer et activer Apache au démarrage
+      ansible.builtin.service:
+        name: "{{ apache_service }}"
+        state: started
+        enabled: true
+
+  handlers:
+    - name: Redémarrer Apache
+      ansible.builtin.service:
+        name: "{{ apache_service }}"
+        state: restarted

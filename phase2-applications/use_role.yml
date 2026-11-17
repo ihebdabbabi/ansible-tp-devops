@@ -1,0 +1,20 @@
+---
+- name: Rôle webserver avec Apache sur node02
+  hosts: node02
+  become: true
+  roles:
+    - role: webserver
+      vars:
+        webserver_title: "node02 - rôle"
+        webserver_message: "Apache déployé par le rôle webserver"
+
+- name: Rôle webserver avec Nginx sur node01
+  hosts: node01
+  become: true
+  roles:
+    - role: webserver
+      vars:
+        webserver_package: nginx
+        webserver_service: nginx
+        webserver_title: "node01 - rôle"
+        webserver_message: "Nginx déployé par le rôle webserver"

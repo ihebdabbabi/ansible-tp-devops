@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ apache_title }}</title>
+</head>
+<body>
+  <h1>{{ apache_message }}</h1>
+  <p>Hôte : {{ inventory_hostname }} ({{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }})</p>
+</body>
+</html>

@@ -1,0 +1,41 @@
+---
+- name: Installer Nginx sur node01 et déployer une page HTML TOTO
+  hosts: node01
+  become: true
+  tasks:
+    - name: Installer Nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+        update_cache: true
+
+    - name: Déployer un fichier de configuration
+      ansible.builtin.copy:
+        content: |
+          add_header X-Managed-By "Ansible TP" always;
+        dest: /etc/nginx/conf.d/security.conf
+        mode: "0644"
+      notify: Redémarrer Nginx
+
+    - name: Déployer la page HTML personnalisée
+      ansible.builtin.copy:
+        src: files/index_nginx.html
+        dest: /var/www/html/index.html
+        mode: "0644"
+
+    - name: Démarrer et activer Nginx au démarrage
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+
+    - name: Vérifier que le site répond (HTTP 200)
+      ansible.builtin.uri:
+        url: http://localhost
+        status_code: 200
+
+  handlers:
+    - name: Redémarrer Nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted

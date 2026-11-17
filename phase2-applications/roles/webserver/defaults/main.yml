@@ -1,0 +1,6 @@
+---
+webserver_package: apache2
+webserver_service: apache2
+webserver_docroot: /var/www/html
+webserver_title: "Serveur web"
+webserver_message: "Page déployée par le rôle webserver"
