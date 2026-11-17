@@ -1,0 +1,169 @@
+---
+- name: Montée en version de GitLab CE sur node01
+  hosts: node01
+  become: true
+  vars:
+    gitlab_port: 8888
+    gitlab_url: "http://{{ ansible_facts['default_ipv4']['address'] }}:{{ gitlab_port }}"
+    backup_dir: /var/opt/gitlab/backups
+    report_file: "{{ playbook_dir }}/rapport_upgrade_gitlab.txt"
+
+  tasks:
+    # --- Point 1 : version actuelle ---
+    - name: Lire la version de GitLab installée
+      ansible.builtin.command:
+        argv:
+          - dpkg-query
+          - "-W"
+          - "-f=${Version}"
+          - gitlab-ce
+      register: version_before
+      changed_when: false
+
+    - name: Mettre à jour l'index des paquets
+      ansible.builtin.apt:
+        update_cache: true
+        lock_timeout: 300
+
+    - name: Lire la dernière version stable disponible
+      ansible.builtin.shell: "apt-cache policy gitlab-ce | awk '/Candidate:/ {print $2}'"
+      register: version_candidate
+      changed_when: false
+
+    - name: Déterminer si une mise à jour est nécessaire
+      ansible.builtin.set_fact:
+        upgrade_needed: "{{ (version_before.stdout != version_candidate.stdout) | bool }}"
+
+    - name: Afficher la situation avant la mise à jour
+      ansible.builtin.debug:
+        msg:
+          - "Version installée : {{ version_before.stdout }}"
+          - "Version disponible : {{ version_candidate.stdout }}"
+          - "Mise à jour nécessaire : {{ upgrade_needed }}"
+
+    # --- Points 2 à 6 : exécutés seulement si une mise à jour existe ---
+    - name: Montée en version sécurisée
+      when: upgrade_needed
+      block:
+        # Point 2 : sauvegarde
+        - name: Sauvegarder la configuration de GitLab
+          ansible.builtin.command: gitlab-ctl backup-etc
+          changed_when: true
+
+        - name: Sauvegarder les données de GitLab
+          ansible.builtin.command: gitlab-backup create CRON=1
+          changed_when: true
+          async: 3600
+          poll: 15
+
+        - name: Vérifier qu'une archive de sauvegarde récente existe
+          ansible.builtin.find:
+            paths: "{{ backup_dir }}"
+            patterns: "*_gitlab_backup.tar"
+            age: -1h
+          register: backup_files
+          failed_when: backup_files.matched == 0
+
+        # Point 3 : mode maintenance
+        - name: Mode maintenance - arrêter l'interface web (Puma)
+          ansible.builtin.command: gitlab-ctl stop puma
+          changed_when: true
+
+        - name: Mode maintenance - arrêter les tâches de fond (Sidekiq)
+          ansible.builtin.command: gitlab-ctl stop sidekiq
+          changed_when: true
+
+        # Point 4 : mise à jour du paquet
+        - name: Mettre à jour gitlab-ce vers la dernière version stable
+          ansible.builtin.apt:
+            name: gitlab-ce
+            state: latest
+            lock_timeout: 300
+          async: 3600
+          poll: 15
+
+        # Point 5 : reconfiguration
+        - name: Reconfigurer GitLab après la mise à jour
+          ansible.builtin.command: gitlab-ctl reconfigure
+          changed_when: true
+          async: 3600
+          poll: 15
+
+        # Point 6 : fin du mode maintenance
+        - name: Fin de maintenance - redémarrer tous les services
+          ansible.builtin.command: gitlab-ctl start
+          changed_when: true
+
+      rescue:
+        - name: En cas d'échec, relancer les services GitLab
+          ansible.builtin.command: gitlab-ctl start
+          changed_when: true
+
+        - name: Arrêter le playbook avec un message clair
+          ansible.builtin.fail:
+            msg: "La montée en version a échoué. La sauvegarde est dans {{ backup_dir }}."
+
+    # --- Point 8 : migrations de base de données ---
+    - name: Compter les migrations en attente
+      ansible.builtin.shell: "gitlab-rake db:migrate:status 2>/dev/null | grep -c '^ *down' || true"
+      register: pending_migrations
+      changed_when: false
+
+    - name: Exécuter les migrations de base de données si nécessaire
+      ansible.builtin.command: gitlab-rake db:migrate
+      when: pending_migrations.stdout | int > 0
+      async: 3600
+      poll: 15
+
+    # --- Point 6 : GitLab répond ---
+    - name: Vérifier que GitLab répond depuis le controller
+      ansible.builtin.uri:
+        url: "{{ gitlab_url }}/users/sign_in"
+        status_code: 200
+      delegate_to: localhost
+      become: false
+      register: gitlab_check
+      retries: 30
+      delay: 10
+      until: gitlab_check.status is defined and gitlab_check.status == 200
+
+    # --- Point 7 : nouvelle version dans le rapport ---
+    - name: Lire la nouvelle version installée
+      ansible.builtin.command:
+        argv:
+          - dpkg-query
+          - "-W"
+          - "-f=${Version}"
+          - gitlab-ce
+      register: version_after
+      changed_when: false
+
+    - name: Contrôler que la version est bien la dernière
+      ansible.builtin.assert:
+        that:
+          - version_after.stdout == version_candidate.stdout
+        fail_msg: "La version installée n'est pas la dernière disponible."
+        success_msg: "GitLab est à la dernière version stable."
+
+    - name: Afficher le rapport de montée en version
+      ansible.builtin.debug:
+        msg:
+          - "Version avant : {{ version_before.stdout }}"
+          - "Version après : {{ version_after.stdout }}"
+          - "Mise à jour effectuée : {{ 'oui' if upgrade_needed else 'non (déjà à jour)' }}"
+          - "Migrations en attente avant contrôle : {{ pending_migrations.stdout }}"
+          - "Réponse HTTP : {{ gitlab_check.status }}"
+
+    - name: Écrire le rapport sur le controller
+      ansible.builtin.copy:
+        dest: "{{ report_file }}"
+        mode: "0644"
+        content: |
+          Rapport de montée en version GitLab
+          Hôte : {{ inventory_hostname }}
+          Version avant : {{ version_before.stdout }}
+          Version après : {{ version_after.stdout }}
+          Mise à jour effectuée : {{ 'oui' if upgrade_needed else 'non (déjà à jour)' }}
+          Réponse HTTP : {{ gitlab_check.status }}
+      delegate_to: localhost
+      become: false
