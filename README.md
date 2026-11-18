@@ -95,7 +95,6 @@ Inventaire, modules (`apt`, `copy`, `template`, `service`, `uri`), variables, te
 | Erreur de parsing YAML | Indentation corrigée, `--syntax-check` et `yamllint` |
 
 ## Résultats
-[Insérez ici vos captures, par exemple :]
 
 ![Ping Ansible](docs/captures/1_ping.PNG)
 
