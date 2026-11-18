@@ -100,4 +100,4 @@ Inventaire, modules (`apt`, `copy`, `template`, `service`, `uri`), variables, te
 ![Ping Ansible](docs/captures/1_ping.png)
 
 ## Auteur
-[Votre nom], [formation / école], [année]
+DABBABI Iheb, DevOps/isoset, 2026
