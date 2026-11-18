@@ -97,7 +97,7 @@ Inventaire, modules (`apt`, `copy`, `template`, `service`, `uri`), variables, te
 ## Résultats
 [Insérez ici vos captures, par exemple :]
 
-![Ping Ansible](docs/captures/1_ping.png)
+![Ping Ansible](docs/captures/1_ping.PNG)
 
 ## Auteur
 DABBABI Iheb, DevOps/isoset, 2026
