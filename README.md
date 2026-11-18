@@ -97,7 +97,7 @@ Inventaire, modules (`apt`, `copy`, `template`, `service`, `uri`), variables, te
 ## Résultats
 [Insérez ici vos captures, par exemple :]
 
-![Ping Ansible](docs/captures/01-ping.png)
+![Ping Ansible](docs/captures/1_ping.png)
 
 ## Auteur
 [Votre nom], [formation / école], [année]
